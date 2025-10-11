@@ -1,3 +1,5 @@
+// Link to the docs for the XBee: https://docs.digi.com/resources/documentation/digidocs/pdfs/90001539.pdf?_gl=1*p9jffk*_gcl_au*MzE4NDE0NzU3LjE3NTk5NTc3NjQ.*_ga*MzEzODkxMDYwLjE3NTk5NTc3NjQ.*_ga_RZXDK3PM3B*czE3NjAxMjU4ODkkbzYkZzEkdDE3NjAxMjY5MTkkajQ3JGwwJGgxNzQ0NjU2MTM2
+
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 
