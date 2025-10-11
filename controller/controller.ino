@@ -267,8 +267,8 @@ void programXBee() {
 void pingXBee() {
   // Flushes the Serial buffer just incase -- probably really don't need this but it is a safety net
   while (Serial.available()) Serial.read();
-  // Creates a temporary buffer to hold the character that the XBee returns
-  char buf[1];
+  // Creates a temporary buffer to hold the character that the XBee returns -- has 20 slots just in case
+  char buf[20];
   readATCommand(buf, CHANNEL_AT_CMD, 20);
   currentChannel = buf[0];
   // readATCommand puts -1 in index zero of the buffer if there was no Serial buffer to read, which means the program could no longer communicate with the XBee
