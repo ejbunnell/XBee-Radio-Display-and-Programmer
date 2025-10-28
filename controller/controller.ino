@@ -10,9 +10,9 @@
 #define OLED_RESET -1   //   QT-PY / XIAO
 Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-#define CHANNEL_IN_PIN 7 // The pin to connect the switch that toggles between channel 'C' and 'F'
-#define BANDWIDTH_IN_PIN 8 // The pin to connect the switch that toggles between bandwidth '555' and '3332'
-#define ACTION_PIN 9 // The pin to connect the button that both connects to the XBee and programs it with the selected settings
+#define CHANNEL_IN_PIN 5 // The pin to connect the switch that toggles between channel 'C' and 'F'
+#define BANDWIDTH_IN_PIN 6 // The pin to connect the switch that toggles between bandwidth '555' and '3332'
+#define ACTION_PIN 7 // The pin to connect the button that both connects to the XBee and programs it with the selected settings
 
 #define DEBOUNCE_DELAY 60 // This is the delay for the debounce for the three inputs. Higher value means more time required to pass before the program will allow the button to be pressed again. It's in ms
 
@@ -128,7 +128,7 @@ enum ChannelSelections {C, F};
 enum BandwidthSelections {B555, B3332};
 
 ChannelSelections selectedChannel = ChannelSelections::C;
-BandwidthSelections selectedBandwidth = BandwidthSelections::B555;
+BandwidthSelections selectedBandwidth = BandwidthSelections::B3332;
 
 bool xbeeFound = false;
 
@@ -242,7 +242,7 @@ void programXBee() {
 void pingXBee() {
   // Flushes the Serial buffer just incase -- probably really don't need this but it is a safety net
   while (Serial.available()) Serial.read();
-  // Creates a temporary buffer to hold the character that the XBee returns -- has 20 slots just in case
+  // Creates a temporary buffer to hold the character that the XBee returns
   char buf[2];
   readATCommand(buf, CHANNEL_AT_CMD, 20);
   currentChannel = buf[0];
@@ -271,6 +271,8 @@ void updateDisplay() {
   display.print("Firmware: ");
   display.println(firmwareVersion);
 
+  display.println();
+
   display.println("Desired Channel: "); // C or F
   display.print("     ");
   // Sets either normal or inverted depending on which is selected
@@ -286,7 +288,9 @@ void updateDisplay() {
   normalColor();
   display.println("Desired Bandwidth: "); // 555 or 3332
   display.print("    ");
-  setSelectedColor(BandwidthSelections::B555, selectedBandwidth);
+  Serial.println(selectedBandwidth);
+  // setSelectedColor(BandwidthSelections::B555, selectedBandwidth);
+  if (selectedBandwidth == BandwidthSelections::B555) invertedColor();
   display.print(" 555 ");
 
   normalColor();
