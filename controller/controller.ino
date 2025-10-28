@@ -18,6 +18,7 @@ Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, 
 
 #define CHANNEL_AT_CMD "CH" // The two letter AT (attention) identifier for the channel command
 #define BANDWIDTH_AT_CMD "ID" // The two letter AT (attention) identifier for the bandwidth (or pan ID) command
+#define FIRMWARE_VERSION_AT_CMD "VR" // The two letter AT (attention) identifier for the firmware version command
 
 #define NO_PARAMETERS "____NO_PARAMETERS____" // A constant char array that allows the sendATCommand function to have a default value for parameters
 
@@ -121,6 +122,7 @@ void setup()   {
 
 char currentChannel = 'C';
 char currentBandwidth[20] = "555";
+char firmwareVersion[4] = "0000";
 
 enum ChannelSelections {C, F};
 enum BandwidthSelections {B555, B3332};
@@ -235,47 +237,23 @@ void programXBee() {
   sendATCommand("WR");
   delay(50);
   while (Serial.available()) { Serial.read(); }
- /*
-  // int bandwidthParameter;
-  // if (selectedBandwidth == BandwidthSelections::B555) bandwidthParameter = BANDWIDTH_555_VALUE;
-  // else bandwidthParameter = BANDWIDTH_3332_VALUE;
-  // sendATCommand(BANDWIDTH_AT_CMD, bandwidthParameter);
-
-  // display.clearDisplay();
-  // display.setCursor(0, 0);
-  // display.println("Programming...");
-  // display.display();
-
-  // while (Serial.available()) Serial.read();
-  // sendATCommand("WR"); // AC - Apply Changes
-  // delay(10);
-  // while (true) {
-  //   if (Serial.available()) {
-  //     bool good = true;
-  //     for (int i = 0; i < 3; i++) {
-  //       int read = Serial.read();
-  //       if (read != okAscii[i]) good = false;
-  //     }
-  //     if (good) {
-  //       xbeeFound = true;
-  //       break;
-  //     }
-  //   }
-  // }*/
 }
 
 void pingXBee() {
   // Flushes the Serial buffer just incase -- probably really don't need this but it is a safety net
   while (Serial.available()) Serial.read();
   // Creates a temporary buffer to hold the character that the XBee returns -- has 20 slots just in case
-  char buf[20];
+  char buf[2];
   readATCommand(buf, CHANNEL_AT_CMD, 20);
   currentChannel = buf[0];
   // readATCommand puts -1 in index zero of the buffer if there was no Serial buffer to read, which means the program could no longer communicate with the XBee
   if (currentChannel == -1) xbeeFound = false;
 
-  readATCommand(currentBandwidth, BANDWIDTH_AT_CMD, 50);
+  readATCommand(currentBandwidth, BANDWIDTH_AT_CMD, 40);
   if (currentBandwidth[0] == -1) xbeeFound = false;
+  
+  readATCommand(firmwareVersion, FIRMWARE_VERSION_AT_CMD, 40);
+  if (firmwareVersion[0] == -1) xbeeFound = false;
 }
 
 void updateDisplay() {
@@ -290,7 +268,8 @@ void updateDisplay() {
   display.print("Bandwidth: ");
   display.println(currentBandwidth);
 
-  display.println();
+  display.print("Firmware: ");
+  display.println(firmwareVersion);
 
   display.println("Desired Channel: "); // C or F
   display.print("     ");
