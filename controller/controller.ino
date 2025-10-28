@@ -10,11 +10,11 @@
 #define OLED_RESET -1   //   QT-PY / XIAO
 Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-#define CHANNEL_IN_PIN 5 // The pin to connect the switch that toggles between channel 'C' and 'F'
-#define BANDWIDTH_IN_PIN 6 // The pin to connect the switch that toggles between bandwidth '555' and '3332'
-#define ACTION_PIN 7 // The pin to connect the button that both connects to the XBee and programs it with the selected settings
+#define CHANNEL_IN_PIN 7 // The pin to connect the switch that toggles between channel 'C' and 'F'
+#define BANDWIDTH_IN_PIN 8 // The pin to connect the switch that toggles between bandwidth '555' and '3332'
+#define ACTION_PIN 9 // The pin to connect the button that both connects to the XBee and programs it with the selected settings
 
-#define DEBOUNCE_DELAY 60 // This is the delay for the debounce for the three inputs. Higher value means more time required to pass before the program will allow the button to be pressed again. It's in ms
+#define DEBOUNCE_DELAY 40 // This is the delay for the debounce for the three inputs. Higher value means more time required to pass before the program will allow the button to be pressed again. It's in ms
 
 #define CHANNEL_AT_CMD "CH" // The two letter AT (attention) identifier for the channel command
 #define BANDWIDTH_AT_CMD "ID" // The two letter AT (attention) identifier for the bandwidth (or pan ID) command
@@ -121,14 +121,15 @@ void setup()   {
 }
 
 char currentChannel = 'C';
-char currentBandwidth[20] = "555";
-char firmwareVersion[4] = "0000";
+char currentBandwidth[16] = "555";
+char firmwareVersion[4] = "";
 
-enum ChannelSelections {C, F};
-enum BandwidthSelections {B555, B3332};
+// the nulls are so that when selections are initialized they are set to either 1 or 2, instead of 0 because that gave a weird bug that this fixes
+enum ChannelSelections {CNULL, C, F};
+enum BandwidthSelections {BNULL, B555, B3332};
 
 ChannelSelections selectedChannel = ChannelSelections::C;
-BandwidthSelections selectedBandwidth = BandwidthSelections::B3332;
+BandwidthSelections selectedBandwidth = BandwidthSelections::B555;
 
 bool xbeeFound = false;
 
@@ -244,15 +245,15 @@ void pingXBee() {
   while (Serial.available()) Serial.read();
   // Creates a temporary buffer to hold the character that the XBee returns
   char buf[2];
-  readATCommand(buf, CHANNEL_AT_CMD, 20);
+  readATCommand(buf, 2, CHANNEL_AT_CMD, 20);
   currentChannel = buf[0];
   // readATCommand puts -1 in index zero of the buffer if there was no Serial buffer to read, which means the program could no longer communicate with the XBee
   if (currentChannel == -1) xbeeFound = false;
 
-  readATCommand(currentBandwidth, BANDWIDTH_AT_CMD, 40);
+  readATCommand(currentBandwidth, 16, BANDWIDTH_AT_CMD, 40);
   if (currentBandwidth[0] == -1) xbeeFound = false;
   
-  readATCommand(firmwareVersion, FIRMWARE_VERSION_AT_CMD, 40);
+  readATCommand(firmwareVersion, 4, FIRMWARE_VERSION_AT_CMD, 40);
   if (firmwareVersion[0] == -1) xbeeFound = false;
 }
 
@@ -269,13 +270,14 @@ void updateDisplay() {
   display.println(currentBandwidth);
 
   display.print("Firmware: ");
-  display.println(firmwareVersion);
-
-  display.println();
+  for (int i = 0; i < 4; i++) display.write(firmwareVersion[i]); // need this for some weird extra characters at the end of the line
+  
+  display.println("\n");
 
   display.println("Desired Channel: "); // C or F
   display.print("     ");
   // Sets either normal or inverted depending on which is selected
+
   setSelectedColor(ChannelSelections::C, selectedChannel);
   display.print(" C ");
 
@@ -288,9 +290,7 @@ void updateDisplay() {
   normalColor();
   display.println("Desired Bandwidth: "); // 555 or 3332
   display.print("    ");
-  Serial.println(selectedBandwidth);
-  // setSelectedColor(BandwidthSelections::B555, selectedBandwidth);
-  if (selectedBandwidth == BandwidthSelections::B555) invertedColor();
+  setSelectedColor(BandwidthSelections::B555, selectedBandwidth);
   display.print(" 555 ");
 
   normalColor();
@@ -314,7 +314,7 @@ void sendATCommand(const char *command, const char *parameters = NO_PARAMETERS) 
   Serial.flush();
 }
 
-void readATCommand(char *buf, const char *command, int delayMs) {
+void readATCommand(char *buf, int size, const char *command, int delayMs) {
   // Sends the getter AT command with no parameters
   sendATCommand(command);
   delay(delayMs);
@@ -322,6 +322,7 @@ void readATCommand(char *buf, const char *command, int delayMs) {
   // Adds the collected Serial data to the buffer
   while (Serial.available()) {
     char read = Serial.read();
+    if (count == size) continue;
     buf[count] = read;
     count++;
   }
