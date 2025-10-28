@@ -10,14 +10,15 @@
 #define OLED_RESET -1   //   QT-PY / XIAO
 Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-#define CHANNEL_IN_PIN 7 // The pin to connect the switch that toggles between channel 'C' and 'F'
-#define BANDWIDTH_IN_PIN 8 // The pin to connect the switch that toggles between bandwidth '555' and '3332'
-#define ACTION_PIN 9 // The pin to connect the button that both connects to the XBee and programs it with the selected settings
+#define CHANNEL_IN_PIN 2 // The pin to connect the switch that toggles between channel 'C' and 'F'
+#define BANDWIDTH_IN_PIN 3 // The pin to connect the switch that toggles between bandwidth '555' and '3332'
+#define ACTION_PIN 4 // The pin to connect the button that both connects to the XBee and programs it with the selected settings
 
 #define DEBOUNCE_DELAY 60 // This is the delay for the debounce for the three inputs. Higher value means more time required to pass before the program will allow the button to be pressed again. It's in ms
 
 #define CHANNEL_AT_CMD "CH" // The two letter AT (attention) identifier for the channel command
 #define BANDWIDTH_AT_CMD "ID" // The two letter AT (attention) identifier for the bandwidth (or pan ID) command
+#define FIRMWARE_VERSION_AT_CMD "VR" // The two letter AT (attention) identifier for the firmware version command
 
 #define NO_PARAMETERS "____NO_PARAMETERS____" // A constant char array that allows the sendATCommand function to have a default value for parameters
 
@@ -120,7 +121,8 @@ void setup()   {
 }
 
 char currentChannel = 'C';
-char currentBandwidth[20] = "555";
+char currentBandwidth[16] = "555";
+char firmwareVersion[4] = "";
 
 enum ChannelSelections {C, F};
 enum BandwidthSelections {B555, B3332};
@@ -235,33 +237,6 @@ void programXBee() {
   sendATCommand("WR");
   delay(50);
   while (Serial.available()) { Serial.read(); }
- /*
-  // int bandwidthParameter;
-  // if (selectedBandwidth == BandwidthSelections::B555) bandwidthParameter = BANDWIDTH_555_VALUE;
-  // else bandwidthParameter = BANDWIDTH_3332_VALUE;
-  // sendATCommand(BANDWIDTH_AT_CMD, bandwidthParameter);
-
-  // display.clearDisplay();
-  // display.setCursor(0, 0);
-  // display.println("Programming...");
-  // display.display();
-
-  // while (Serial.available()) Serial.read();
-  // sendATCommand("WR"); // AC - Apply Changes
-  // delay(10);
-  // while (true) {
-  //   if (Serial.available()) {
-  //     bool good = true;
-  //     for (int i = 0; i < 3; i++) {
-  //       int read = Serial.read();
-  //       if (read != okAscii[i]) good = false;
-  //     }
-  //     if (good) {
-  //       xbeeFound = true;
-  //       break;
-  //     }
-  //   }
-  // }*/
 }
 
 void pingXBee() {
@@ -276,6 +251,9 @@ void pingXBee() {
 
   readATCommand(currentBandwidth, BANDWIDTH_AT_CMD, 50);
   if (currentBandwidth[0] == -1) xbeeFound = false;
+
+  readATCommand(firmwareVersion, FIRMWARE_VERSION_AT_CMD, 50);
+  if (firmwareVersion[0] == -1) xbeeFound = false;
 }
 
 void updateDisplay() {
@@ -289,6 +267,9 @@ void updateDisplay() {
 
   display.print("Bandwidth: ");
   display.println(currentBandwidth);
+
+  display.print("Firmware: ");
+  display.println(firmwareVersion);
 
   display.println();
 
