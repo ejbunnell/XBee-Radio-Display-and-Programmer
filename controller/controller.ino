@@ -122,7 +122,7 @@ void setup()   {
 
 char currentChannel = 'C';
 char currentBandwidth[20] = "555";
-char firmwareVersion[4] = "";
+char firmwareVersion[4] = "0000";
 
 enum ChannelSelections {C, F};
 enum BandwidthSelections {B555, B3332};
@@ -249,10 +249,10 @@ void pingXBee() {
   // readATCommand puts -1 in index zero of the buffer if there was no Serial buffer to read, which means the program could no longer communicate with the XBee
   if (currentChannel == -1) xbeeFound = false;
 
-  readATCommand(currentBandwidth, BANDWIDTH_AT_CMD, 50);
+  readATCommand(currentBandwidth, BANDWIDTH_AT_CMD, 40);
   if (currentBandwidth[0] == -1) xbeeFound = false;
-
-  readATCommand(firmwareVersion, FIRMWARE_VERSION_AT_CMD, 50);
+  
+  readATCommand(firmwareVersion, FIRMWARE_VERSION_AT_CMD, 40);
   if (firmwareVersion[0] == -1) xbeeFound = false;
 }
 
