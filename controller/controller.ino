@@ -2,6 +2,7 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
+#include <SoftwareSerial.h>
 
 #define i2c_Address 0x3c // This specific display uses this address
 
@@ -9,9 +10,14 @@
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
 
-#define CHANNEL_IN_PIN 7 // The pin to connect the switch that toggles between channel 'C' and 'F'
-#define BANDWIDTH_IN_PIN 8 // The pin to connect the switch that toggles between bandwidth '555' and '3332'
-#define ACTION_PIN 9 // The pin to connect the button that both connects to the XBee and programs it with the selected settings
+#define CHANNEL_IN_PIN 2 // The pin to connect the switch that toggles between channel 'C' and 'F'
+#define BANDWIDTH_IN_PIN 3 // The pin to connect the switch that toggles between bandwidth '555' and '3332'
+#define ACTION_PIN 4 // The pin to connect the button that both connects to the XBee and programs it with the selected settings
+
+// only the following can be used for RX:
+// 10, 11, 12, 13, 50, 51, 52, 53, 62, 63, 64, 65, 66, 67, 68, 69
+#define XBEE_RX 10 // The pin to connect the XBee's TX (transmit)
+#define XBEE_TX 11 // The pin to connect the XBee's RX (receive)
 
 #define DEBOUNCE_DELAY 40 // This is the delay for the debounce for the three inputs. Higher value means more time required to pass before the program will allow the button to be pressed again. It's in ms
 
@@ -107,16 +113,19 @@ Debounce channelButton{CHANNEL_IN_PIN, DEBOUNCE_DELAY};
 Debounce bandwidthButton{BANDWIDTH_IN_PIN, DEBOUNCE_DELAY};
 Debounce actionButton{ACTION_PIN, DEBOUNCE_DELAY};
 
-extern int __heap_start, *__brkval;
-int freeMemory() {
-  int v;
-  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
-}
+// extern int __heap_start, *__brkval;
+// int freeMemory() {
+//   int v;
+//   return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+// }
+
+SoftwareSerial xbee(10, 11); // RX, TX
 
 void setup()   {
   Serial.begin(9600);
-  Serial.print(F("Free memory: "));
-  Serial.println(freeMemory());
+  xbee.begin(9600);
+  // Serial.print(F("Free memory: "));
+  // Serial.println(freeMemory());
 
   delay(250);
   display.begin(i2c_Address, true);
@@ -182,7 +191,7 @@ void displayDots()
 
 void connectToXBee() {
   // Clears the buffer - probably not needed, but ensures nothing in the way of the "OK" signal
-  while (Serial.available()) Serial.read();
+  while (xbee.available()) xbee.read();
   display.setCursor(0, 0);
   display.clearDisplay();
   normalColor();
@@ -191,17 +200,17 @@ void connectToXBee() {
   // Waits the one second before (plus a little extra) and displays dots to show something is happening
   displayDots();
   // Sends the command character three times to the XBee
-  Serial.write("+++", 3);
+  xbee.write("+++", 3);
   // Waits the one second after (plus a little extra) and displays dots to show something is happening
   displayDots();
 
   display.clearDisplay();
   display.setCursor(0, 0);
-  if (Serial.available()) {
+  if (xbee.available()) {
     // If connected becomes false, one of the three characters is not "Ok\r"
     bool connected = true;
     for (int i = 0; i < 3; i++) {
-      int read = Serial.read();
+      int read = xbee.read();
       if (read != okAscii[i]) connected = false;
     }
     if (connected) {
@@ -240,18 +249,18 @@ void programXBee() {
   // Need a delay to wait for the Serial data to come back from the XBee. Not sure how long exactly it will take, but the whole program isn't intensive so better to wait longer than not
   delay(50);
   // Flushes the Serial buffer from the "OK" signal the write sends back
-  while (Serial.available()) { Serial.read(); }
+  while (xbee.available()) { xbee.read(); }
 
   if (selectedBandwidth == BandwidthSelections::B555) sendATCommand(BANDWIDTH_AT_CMD, "555");
   else sendATCommand(BANDWIDTH_AT_CMD, "3332");
   sendATCommand(WRITE_AT_CMD);
   delay(50);
-  while (Serial.available()) { Serial.read(); }
+  while (xbee.available()) { xbee.read(); }
 }
 
 void pingXBee() {
   // Flushes the Serial buffer just incase -- probably really don't need this but it is a safety net
-  while (Serial.available()) Serial.read();
+  while (xbee.available()) xbee.read();
   // Creates a temporary buffer to hold the character that the XBee returns
   char buf[2];
   readATCommand(buf, 2, CHANNEL_AT_CMD, 20);
@@ -313,14 +322,14 @@ void updateDisplay() {
 
 void sendATCommand(const char *command, const char *parameters = NO_PARAMETERS) {
   // Need the "AT" before every command to get the attention of the XBee
-  Serial.write("AT");
+  xbee.write("AT");
   // Immediately after the "AT" needs to be the command characters
-  Serial.write(command);
+  xbee.write(command);
   // If there are any parameters, write them immediately after the command characters
-  if (parameters != NO_PARAMETERS) Serial.write(parameters);
+  if (parameters != NO_PARAMETERS) xbee.write(parameters);
   // Every command ends in the carriage return
-  Serial.write('\r');
-  Serial.flush();
+  xbee.write('\r');
+  xbee.flush();
 }
 
 void readATCommand(char *buf, int size, const char *command, int delayMs) {
@@ -329,8 +338,8 @@ void readATCommand(char *buf, int size, const char *command, int delayMs) {
   delay(delayMs);
   int count = 0;
   // Adds the collected Serial data to the buffer
-  while (Serial.available()) {
-    char read = Serial.read();
+  while (xbee.available()) {
+    char read = xbee.read();
     if (count == size) continue;
     buf[count] = read;
     count++;
