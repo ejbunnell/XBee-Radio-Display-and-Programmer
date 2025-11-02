@@ -1,14 +1,16 @@
 // https://docs.digi.com//resources/documentation/digidocs/90002273/default.htm#concepts/c_90002273_start.htm?TocPath=Digi%2520XBee%25C2%25AE%25203%2520802.15.4%2520RF%2520Module%257C_____0
+// "C:\Users\Elliott\AppData\Local\Digi\XCTU-NG\radio_firmwares\XB3-24A\XB3-24A_2014-th.gbl" -- firmware location
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 #include <SoftwareSerial.h>
 
-#define i2c_Address 0x3c // This specific display uses this address
+#include "DisplayObject.h"
+#include "Debounce.h"
 
+#define i2c_Address 0x3c // This specific display uses this address
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
-Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
 
 #define CHANNEL_IN_PIN 2 // The pin to connect the switch that toggles between channel 'C' and 'F'
 #define BANDWIDTH_IN_PIN 3 // The pin to connect the switch that toggles between bandwidth '555' and '3332'
@@ -28,24 +30,16 @@ Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
 
 #define NO_PARAMETERS "____NO_PARAMETERS____" // A constant char array that allows the sendATCommand function to have a default value for parameters
 
+#define LATEST_FIRMWARE 2014 // The latest firmware version for 802.15.4
+
 // Sets the color of the text to white and the background to black
-void normalColor()
-{
-  display.setTextColor(SH110X_WHITE);
-}
+void normalColor();
 // Sets the color of the text to black and the background white
-void invertedColor()
-{
-  display.setTextColor(SH110X_BLACK, SH110X_WHITE);
-}
+void invertedColor();
 // For selections, the color of the text is inverted
 // Var will be the option and selected will be the currently selected option
 // For example, if var is 0 and selected is 0, the text will be inverted. Otherwise, the text will be normal
-void setSelectedColor(int var, int selected)
-{
-  if (var == selected) invertedColor();
-  else normalColor();
-}
+void setSelectedColor(int var, int selected);
 
 // Attempt to connect to the XBee by sending the Command Character (CC), '+' three times with one second (GT) of no communication before and after
 // The XBee will then respond with "OK\r", which tells us that we are connected. If it does not respond, the screen goes to a "No XBee" screen and waits for the user to press the action button to try again
@@ -68,64 +62,17 @@ void sendATCommand(const char *command, const char *parameters = NO_PARAMETERS);
 // If there is no Serial data to be read, the program puts a -1 in index zero of the buffer
 void readATCommand(char *buf, const char *command, int delayMs);
 
-// A quick class to add a debounce to all digital inputs
-class Debounce {
-  public:
-    Debounce(int pin, unsigned int debounceDelay);
-    int GetState();
-  private:
-    int pin;
-    int state = HIGH;
-    unsigned long debounceTime = 0;
-    unsigned int debounceDelay;
-    bool canReadLow = true;
-};
-
-// The constructor sets the pinMode of the pin to INPUT_PULLUP
-Debounce::Debounce(int pin, unsigned int debounceDelay) {
-  pinMode(pin, INPUT_PULLUP);
-  this->pin = pin;
-  this->debounceDelay = debounceDelay;
-}
-
-// Gets the current state of the input after applying a debounce
-// If digitalRead returns HIGH, it will return HIGH
-// If digitalRead returns LOW, it will determine if it has returned LOW within the debounceDelay. If it has, then it will return LOW
-int Debounce::GetState() {
-  int reading = digitalRead(pin);
-
-  if (canReadLow) state = reading;
-  else state = HIGH;
-
-  if (reading == LOW) {
-    debounceTime = millis();
-    canReadLow = false;
-  }
-
-  if ((millis() - debounceTime) > debounceDelay) {
-    canReadLow = true;
-  }
-
-  return state;
-}
+Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
 
 Debounce channelButton{CHANNEL_IN_PIN, DEBOUNCE_DELAY};
 Debounce bandwidthButton{BANDWIDTH_IN_PIN, DEBOUNCE_DELAY};
 Debounce actionButton{ACTION_PIN, DEBOUNCE_DELAY};
 
-// extern int __heap_start, *__brkval;
-// int freeMemory() {
-//   int v;
-//   return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
-// }
-
 SoftwareSerial xbee(10, 11); // RX, TX
 
-void setup()   {
+void setup() {
   Serial.begin(9600);
   xbee.begin(9600);
-  // Serial.print(F("Free memory: "));
-  // Serial.println(freeMemory());
 
   delay(250);
   display.begin(i2c_Address, true);
@@ -178,8 +125,7 @@ unsigned long time;
 
 const char okAscii[3] = {'O', 'K', '\r'};
 
-void displayDots()
-{
+void displayDots() {
   time = millis();
   while ((millis() - time ) < 1100) {
     if (millis() % 200 == 0) {
@@ -286,9 +232,9 @@ void updateDisplay() {
   display.println(currentBandwidth);
 
   display.print(F("Firmware: "));
-  for (int i = 0; i < 4; i++) display.write(firmwareVersion[i]); // need this for some weird extra characters at the end of the line
+  display.println(firmwareVersion);
   
-  display.println(F("\n"));
+  display.println();
 
   display.println(F("Desired Channel: ")); // C or F
   display.print("     ");
@@ -344,4 +290,20 @@ void readATCommand(char *buf, int size, const char *command, int delayMs) {
   }
   // If there is no Serial data, the program is no longer talking to the XBee, which means index zero should be -1
   if (count == 0) buf[0] = -1;
+}
+
+void normalColor()
+{
+  display.setTextColor(SH110X_WHITE);
+}
+
+void invertedColor()
+{
+  display.setTextColor(SH110X_BLACK, SH110X_WHITE);
+}
+
+void setSelectedColor(int var, int selected)
+{
+  if (var == selected) invertedColor();
+  else normalColor();
 }
