@@ -5,7 +5,6 @@
 #include <Adafruit_SH110X.h>
 #include <SoftwareSerial.h>
 
-#include "DisplayObject.h"
 #include "Debounce.h"
 
 #define i2c_Address 0x3c // This specific display uses this address
@@ -27,10 +26,11 @@
 #define BANDWIDTH_AT_CMD "ID" // The two letter AT (attention) identifier for the bandwidth (or pan ID) command
 #define FIRMWARE_VERSION_AT_CMD "VR" // The two letter AT (attention) identifier for the firmware version command
 #define WRITE_AT_CMD "WR" // The two letter AT (attention) identifier for the write-to-flash command
+#define INVOKE_BOOTLOADER_AT_CMD "%P"
 
 #define NO_PARAMETERS "____NO_PARAMETERS____" // A constant char array that allows the sendATCommand function to have a default value for parameters
 
-#define LATEST_FIRMWARE 2014 // The latest firmware version for 802.15.4
+#define LATEST_FIRMWARE "2014" // The latest firmware version for 802.15.4
 
 // Sets the color of the text to white and the background to black
 void normalColor();
@@ -62,17 +62,24 @@ void sendATCommand(const char *command, const char *parameters = NO_PARAMETERS);
 // If there is no Serial data to be read, the program puts a -1 in index zero of the buffer
 void readATCommand(char *buf, const char *command, int delayMs);
 
+void updateFirmware();
+
 Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
 
 Debounce channelButton{CHANNEL_IN_PIN, DEBOUNCE_DELAY};
 Debounce bandwidthButton{BANDWIDTH_IN_PIN, DEBOUNCE_DELAY};
 Debounce actionButton{ACTION_PIN, DEBOUNCE_DELAY};
 
-SoftwareSerial xbee(10, 11); // RX, TX
+SoftwareSerial xbee(XBEE_RX, XBEE_TX); 
+SoftwareSerial firmwareXbee(XBEE_RX, XBEE_TX); 
 
 void setup() {
   Serial.begin(9600);
-  xbee.begin(9600);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+  // firmwareXbee.begin(115200);
+  xbee.begin(9600); 
 
   delay(250);
   display.begin(i2c_Address, true);
@@ -99,6 +106,8 @@ BandwidthSelections selectedBandwidth = BandwidthSelections::B555;
 
 bool xbeeFound = false;
 
+bool tryUpdateFirmware = true;
+
 void loop() {
   // There are two states the program can be in -- with an XBee, or without
   if (xbeeFound) {
@@ -122,8 +131,6 @@ void loop() {
 }
 
 unsigned long time;
-
-const char okAscii[3] = {'O', 'K', '\r'};
 
 void displayDots() {
   time = millis();
@@ -153,13 +160,7 @@ void connectToXBee() {
   display.clearDisplay();
   display.setCursor(0, 0);
   if (xbee.available()) {
-    // If connected becomes false, one of the three characters is not "Ok\r"
-    bool connected = true;
-    for (int i = 0; i < 3; i++) {
-      int read = xbee.read();
-      if (read != okAscii[i]) connected = false;
-    }
-    if (connected) {
+    if (xbee.find("OK\r")) {
       xbeeFound = true;
       display.println(F("Xbee has successfully entered Command Mode"));
     }
@@ -217,6 +218,12 @@ void pingXBee() {
   
   readATCommand(firmwareVersion, 4, FIRMWARE_VERSION_AT_CMD, 40);
   if (firmwareVersion[0] == -1) xbeeFound = false;
+
+  if (tryUpdateFirmware) {
+    if (firmwareVersion[1] != LATEST_FIRMWARE[1] || firmwareVersion[2] != LATEST_FIRMWARE[2] || firmwareVersion[3] != LATEST_FIRMWARE[3]) {
+      // updateFirmware();
+    }
+  }
 }
 
 void updateDisplay() {
@@ -290,6 +297,51 @@ void readATCommand(char *buf, int size, const char *command, int delayMs) {
   }
   // If there is no Serial data, the program is no longer talking to the XBee, which means index zero should be -1
   if (count == 0) buf[0] = -1;
+}
+
+void updateFirmware() {
+  while (true) {
+      
+    if (channelButton.GetState() == LOW || bandwidthButton.GetState() == LOW) {
+      tryUpdateFirmware = !tryUpdateFirmware;
+    }
+    
+    if (actionButton.GetState() == LOW) break;
+
+    
+    display.clearDisplay();
+    normalColor();
+    display.setCursor(0, 0);
+    display.println(F("   Update firmware?   "));
+
+    display.print("     ");
+    setSelectedColor(true, tryUpdateFirmware);
+    display.print(F(" Yes "));
+
+    normalColor();
+    display.print(F("    "));
+
+    setSelectedColor(false, tryUpdateFirmware);
+    display.println(F(" No "));
+
+    display.display();
+    
+    sendATCommand(CHANNEL_AT_CMD); // feeds the command timeout
+  }
+
+  if (!tryUpdateFirmware) return;
+  
+  firmwareXbee.begin(115200);
+  delay(10);
+  sendATCommand(INVOKE_BOOTLOADER_AT_CMD);
+  xbee.end();
+
+  while (firmwareXbee.available()) {
+    Serial.write(firmwareXbee.read());
+  }
+  firmwareXbee.end();
+  xbee.begin(9600);
+
 }
 
 void normalColor()
