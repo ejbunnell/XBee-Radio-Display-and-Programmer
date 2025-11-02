@@ -1,4 +1,4 @@
-// Link to the docs for the XBee: https://docs.digi.com/resources/documentation/digidocs/pdfs/90001539.pdf?_gl=1*p9jffk*_gcl_au*MzE4NDE0NzU3LjE3NTk5NTc3NjQ.*_ga*MzEzODkxMDYwLjE3NTk5NTc3NjQ.*_ga_RZXDK3PM3B*czE3NjAxMjU4ODkkbzYkZzEkdDE3NjAxMjY5MTkkajQ3JGwwJGgxNzQ0NjU2MTM2
+// https://docs.digi.com//resources/documentation/digidocs/90002273/default.htm#concepts/c_90002273_start.htm?TocPath=Digi%2520XBee%25C2%25AE%25203%2520802.15.4%2520RF%2520Module%257C_____0
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
@@ -139,9 +139,9 @@ void setup()   {
   connectToXBee();
 }
 
-char currentChannel = 'C';
-char currentBandwidth[16] = "555";
-char firmwareVersion[4] = "";
+char currentChannel[2] = "C";
+char currentBandwidth[5] = "555";
+char firmwareVersion[5] = "";
 
 // the nulls are so that when selections are initialized they are set to either 1 or 2, instead of 0 because that gave a weird bug that this fixes
 enum ChannelSelections {CNULL, C, F};
@@ -261,14 +261,12 @@ void programXBee() {
 void pingXBee() {
   // Flushes the Serial buffer just incase -- probably really don't need this but it is a safety net
   while (xbee.available()) xbee.read();
-  // Creates a temporary buffer to hold the character that the XBee returns
-  char buf[2];
-  readATCommand(buf, 2, CHANNEL_AT_CMD, 20);
-  currentChannel = buf[0];
+
+  readATCommand(currentChannel, 1, CHANNEL_AT_CMD, 20);
   // readATCommand puts -1 in index zero of the buffer if there was no Serial buffer to read, which means the program could no longer communicate with the XBee
   if (currentChannel == -1) xbeeFound = false;
 
-  readATCommand(currentBandwidth, 16, BANDWIDTH_AT_CMD, 40);
+  readATCommand(currentBandwidth, 4, BANDWIDTH_AT_CMD, 40);
   if (currentBandwidth[0] == -1) xbeeFound = false;
   
   readATCommand(firmwareVersion, 4, FIRMWARE_VERSION_AT_CMD, 40);
