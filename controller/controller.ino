@@ -5,7 +5,6 @@
 #include <Adafruit_SH110X.h>
 #include <SoftwareSerial.h>
 
-#include "DisplayObject.h"
 #include "Debounce.h"
 
 #define i2c_Address 0x3c // This specific display uses this address
@@ -153,13 +152,7 @@ void connectToXBee() {
   display.clearDisplay();
   display.setCursor(0, 0);
   if (xbee.available()) {
-    // If connected becomes false, one of the three characters is not "Ok\r"
-    bool connected = true;
-    for (int i = 0; i < 3; i++) {
-      int read = xbee.read();
-      if (read != okAscii[i]) connected = false;
-    }
-    if (connected) {
+    if (xbee.find("OK\r")) {
       xbeeFound = true;
       display.println(F("Xbee has successfully entered Command Mode"));
     }
