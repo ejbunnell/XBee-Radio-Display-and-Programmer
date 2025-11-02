@@ -7,8 +7,7 @@
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
-#define OLED_RESET -1   //   QT-PY / XIAO
-Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
 
 #define CHANNEL_IN_PIN 7 // The pin to connect the switch that toggles between channel 'C' and 'F'
 #define BANDWIDTH_IN_PIN 8 // The pin to connect the switch that toggles between bandwidth '555' and '3332'
@@ -19,6 +18,7 @@ Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, 
 #define CHANNEL_AT_CMD "CH" // The two letter AT (attention) identifier for the channel command
 #define BANDWIDTH_AT_CMD "ID" // The two letter AT (attention) identifier for the bandwidth (or pan ID) command
 #define FIRMWARE_VERSION_AT_CMD "VR" // The two letter AT (attention) identifier for the firmware version command
+#define WRITE_AT_CMD "WR" // The two letter AT (attention) identifier for the write-to-flash command
 
 #define NO_PARAMETERS "____NO_PARAMETERS____" // A constant char array that allows the sendATCommand function to have a default value for parameters
 
@@ -107,10 +107,20 @@ Debounce channelButton{CHANNEL_IN_PIN, DEBOUNCE_DELAY};
 Debounce bandwidthButton{BANDWIDTH_IN_PIN, DEBOUNCE_DELAY};
 Debounce actionButton{ACTION_PIN, DEBOUNCE_DELAY};
 
+extern int __heap_start, *__brkval;
+int freeMemory() {
+  int v;
+  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+}
+
 void setup()   {
   Serial.begin(9600);
+  Serial.print(F("Free memory: "));
+  Serial.println(freeMemory());
 
+  delay(250);
   display.begin(i2c_Address, true);
+
   display.clearDisplay();
   display.display(); // need this for the display to actually change
   display.setTextSize(1);
@@ -147,7 +157,7 @@ void loop() {
     normalColor();
     display.print("       ");
     invertedColor();
-    display.println("No XBee");
+    display.println(F("No XBee"));
     display.display();
 
     // Will attempt to connect to the XBee when one isn't connected if the user presses the action button
@@ -157,7 +167,18 @@ void loop() {
 
 unsigned long time;
 
-const int okAscii[3] = {'O', 'K', '\r'};
+const char okAscii[3] = {'O', 'K', '\r'};
+
+void displayDots()
+{
+  time = millis();
+  while ((millis() - time ) < 1100) {
+    if (millis() % 200 == 0) {
+      display.print(F("."));
+      display.display();
+    }
+  }
+}
 
 void connectToXBee() {
   // Clears the buffer - probably not needed, but ensures nothing in the way of the "OK" signal
@@ -165,26 +186,14 @@ void connectToXBee() {
   display.setCursor(0, 0);
   display.clearDisplay();
   normalColor();
-  display.print("Initializing XBee");
+  display.print(F("Initializing XBee"));
   display.display();
   // Waits the one second before (plus a little extra) and displays dots to show something is happening
-  time = millis();
-  while ((millis() - time) < 1100) {
-    if (millis() % 200 == 0) {
-      display.print(".");
-      display.display();
-    }
-  }
+  displayDots();
   // Sends the command character three times to the XBee
   Serial.write("+++", 3);
   // Waits the one second after (plus a little extra) and displays dots to show something is happening
-  time = millis();
-  while ((millis() - time ) < 1100) {
-    if (millis() % 200 == 0) {
-      display.print(".");
-      display.display();
-    }
-  }
+  displayDots();
 
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -197,14 +206,14 @@ void connectToXBee() {
     }
     if (connected) {
       xbeeFound = true;
-      display.println("Xbee has successfully entered Command Mode");
+      display.println(F("Xbee has successfully entered Command Mode"));
     }
     else {
-      display.println("Xbee did not confirm entering Command Mode");
+      display.println(F("Xbee did not confirm entering Command Mode"));
     }
   }
   else {
-    display.println("Xbee was not found");
+    display.println(F("Xbee was not found"));
   }
   display.display();
   delay(1000);
@@ -227,7 +236,7 @@ void programXBee() {
 
   if (selectedChannel == ChannelSelections::C) sendATCommand(CHANNEL_AT_CMD, "C");
   else sendATCommand(CHANNEL_AT_CMD, "F");
-  sendATCommand("WR"); // writes (WR) the data to the XBee's flash (can only do 10,000 times per XBee but I don't think that would ever happen -- just something to note)
+  sendATCommand(WRITE_AT_CMD); // writes (WR) the data to the XBee's flash (can only do 10,000 times per XBee but I don't think that would ever happen -- just something to note)
   // Need a delay to wait for the Serial data to come back from the XBee. Not sure how long exactly it will take, but the whole program isn't intensive so better to wait longer than not
   delay(50);
   // Flushes the Serial buffer from the "OK" signal the write sends back
@@ -235,7 +244,7 @@ void programXBee() {
 
   if (selectedBandwidth == BandwidthSelections::B555) sendATCommand(BANDWIDTH_AT_CMD, "555");
   else sendATCommand(BANDWIDTH_AT_CMD, "3332");
-  sendATCommand("WR");
+  sendATCommand(WRITE_AT_CMD);
   delay(50);
   while (Serial.available()) { Serial.read(); }
 }
@@ -263,41 +272,41 @@ void updateDisplay() {
 
   normalColor();
   display.setCursor(0, 0);
-  display.print("Channel: ");
+  display.print(F("Channel: "));
   display.println(currentChannel);
 
-  display.print("Bandwidth: ");
+  display.print(F("Bandwidth: "));
   display.println(currentBandwidth);
 
-  display.print("Firmware: ");
+  display.print(F("Firmware: "));
   for (int i = 0; i < 4; i++) display.write(firmwareVersion[i]); // need this for some weird extra characters at the end of the line
   
-  display.println("\n");
+  display.println(F("\n"));
 
-  display.println("Desired Channel: "); // C or F
+  display.println(F("Desired Channel: ")); // C or F
   display.print("     ");
   // Sets either normal or inverted depending on which is selected
 
   setSelectedColor(ChannelSelections::C, selectedChannel);
-  display.print(" C ");
+  display.print(F(" C "));
 
   normalColor();
-  display.print("      ");
+  display.print(F("      "));
 
   setSelectedColor(ChannelSelections::F, selectedChannel);
-  display.println(" F ");
+  display.println(F(" F "));
 
   normalColor();
-  display.println("Desired Bandwidth: "); // 555 or 3332
-  display.print("    ");
+  display.println(F("Desired Bandwidth: ")); // 555 or 3332
+  display.print(F("    "));
   setSelectedColor(BandwidthSelections::B555, selectedBandwidth);
-  display.print(" 555 ");
+  display.print(F(" 555 "));
 
   normalColor();
-  display.print("   ");
+  display.print(F("   "));
 
   setSelectedColor(BandwidthSelections::B3332, selectedBandwidth);
-  display.println(" 3332 ");
+  display.println(F(" 3332 "));
 
   display.display();
 }
