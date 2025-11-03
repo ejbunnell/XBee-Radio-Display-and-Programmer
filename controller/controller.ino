@@ -4,6 +4,8 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 #include <SoftwareSerial.h>
+#include <Stream.h>
+// #include <SPIFFS.h>
 
 #include "Debounce.h"
 
@@ -19,6 +21,8 @@
 // 10, 11, 12, 13, 50, 51, 52, 53, 62, 63, 64, 65, 66, 67, 68, 69
 #define XBEE_RX 10 // The pin to connect the XBee's TX (transmit)
 #define XBEE_TX 11 // The pin to connect the XBee's RX (receive)
+
+#define RESET_PIN 7
 
 #define DEBOUNCE_DELAY 40 // This is the delay for the debounce for the three inputs. Higher value means more time required to pass before the program will allow the button to be pressed again. It's in ms
 
@@ -44,6 +48,8 @@ void setSelectedColor(int var, int selected);
 // Attempt to connect to the XBee by sending the Command Character (CC), '+' three times with one second (GT) of no communication before and after
 // The XBee will then respond with "OK\r", which tells us that we are connected. If it does not respond, the screen goes to a "No XBee" screen and waits for the user to press the action button to try again
 void connectToXBee();
+
+void resetXbee();
 
 // Takes the currently selected options for both channel and bandwidth and writes (WR) them to the XBee
 void programXBee();
@@ -80,6 +86,10 @@ void setup() {
   }
   // firmwareXbee.begin(115200);
   xbee.begin(9600); 
+
+  pinMode(RESET_PIN, OUTPUT);
+
+  resetXbee();   
 
   delay(250);
   display.begin(i2c_Address, true);
@@ -221,7 +231,7 @@ void pingXBee() {
 
   if (tryUpdateFirmware) {
     if (firmwareVersion[1] != LATEST_FIRMWARE[1] || firmwareVersion[2] != LATEST_FIRMWARE[2] || firmwareVersion[3] != LATEST_FIRMWARE[3]) {
-      // updateFirmware();
+      updateFirmware();
     }
   }
 }
@@ -299,6 +309,70 @@ void readATCommand(char *buf, int size, const char *command, int delayMs) {
   if (count == 0) buf[0] = -1;
 }
 
+#define SOH 0x01
+#define EOT 0x04
+#define ACK 0x06
+#define NAK 0x15
+#define CAN 0x18
+#define CRC_REQUEST 'C'
+
+uint16_t crc16(const uint8_t *buf, uint16_t len) {
+  uint16_t crc = 0;
+  while (len--) {
+    crc ^= (uint16_t)*buf++ << 8;
+    for (uint8_t i = 0; i < 8; i++)
+      crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1;
+  }
+  return crc;
+}
+
+bool sendXmodemCRC(Stream &serial, File &firmware) {
+  uint8_t packet[128];
+  uint8_t packetNum = 1;
+
+  // 1️⃣ Wait for bootloader to send 'C'
+  unsigned long start = millis();
+  while (millis() - start < 5000) {
+    if (serial.available() && serial.read() == 'C') break;
+  }
+
+  while (true) {
+    int read = firmware.read(packet, 128);
+
+    if (read <= 0) {
+      // 2️⃣ Send EOT
+      serial.write(EOT);
+      while (serial.read() != ACK);
+      return true;
+    }
+
+    // pad short packet
+    for (int i = read; i < 128; i++) packet[i] = 0x1A;
+
+    // 3️⃣ Build and send packet
+    serial.write(SOH);
+    serial.write(packetNum);
+    serial.write(~packetNum);
+
+    uint16_t crc = crc16(packet, 128);
+    serial.write(crc >> 8);
+    serial.write(crc & 0xFF);
+
+    // 4️⃣ Wait for ACK
+    int r = -1;
+    unsigned long t = millis();
+    while (millis() - t < 2000) {
+      if (serial.available()) {
+        r = serial.read();
+        break;
+      }
+    }
+    if (r != ACK) return false;
+
+    packetNum++;
+  }
+}
+
 void updateFirmware() {
   while (true) {
       
@@ -330,15 +404,15 @@ void updateFirmware() {
   }
 
   if (!tryUpdateFirmware) return;
-  
+
   firmwareXbee.begin(115200);
   delay(10);
   sendATCommand(INVOKE_BOOTLOADER_AT_CMD);
   xbee.end();
 
-  while (firmwareXbee.available()) {
-    Serial.write(firmwareXbee.read());
-  }
+  firmwareXbee.write('1');
+  firmwareXbee.flush();
+
   firmwareXbee.end();
   xbee.begin(9600);
 
@@ -358,4 +432,10 @@ void setSelectedColor(int var, int selected)
 {
   if (var == selected) invertedColor();
   else normalColor();
+}
+
+void resetXbee() {
+  digitalWrite(RESET_PIN, LOW);
+  delay(10);
+  digitalWrite(RESET_PIN, HIGH);
 }
